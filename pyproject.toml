@@ -9,6 +9,7 @@ packages = [{include = "home_task"}]
 [tool.poetry.dependencies]
 python = "^3.9"
 fastapi = "^0.94.0"
+uvicorn = "^0.21.0"
 psycopg2 = "^2.9.5"
 sqlalchemy = "<1.4.10"
 alembic = "^1.10.2"
