@@ -4,7 +4,7 @@ version = "0.1.0"
 description = ""
 authors = ["Dmytro Kostochko <dmytro.kostochko@hrforecast.de>"]
 readme = "README.md"
-packages = [{include = "hrf_universe_home_task"}]
+packages = [{include = "home_task"}]
 
 [tool.poetry.dependencies]
 python = "^3.9"
