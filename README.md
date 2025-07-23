@@ -1,97 +1,73 @@
-This is a task to check your skills in Python and SQL.
-It is a simplified version of a real task in our project.
-
-Create a public fork of this repository and send us a link to your fork when you are done.
-
-# Task
-
-We have millions of job postings crawled from the internet and want to calculate some statistics about days to hire.
-
-Job posting structure:
-
-```python
-@dataclass
-class JobPosting:
-    id: str
-    title: str
-    standard_job_id: str
-    country_code: Optional[str] = None
-    days_to_hire: Optional[int] = None
-```
-
-- `standard_job_id` -- all job postings are assigned to a standard job. It is a job title normalized to a common form,
-  e.g. "Software Engineer" and "Software Developer" are both assigned to "Software Engineer".
-- `country_code` -- country code in ISO 3166-1 alpha-2 format. 
-  It can be `None` if we can't determine the country.
-- `days_to_hire` -- a number of days between posting date and hire date. 
-  It can be `None` if a job posting is not hired yet.
+This is an overview of my solution - the original task specifications have been moved to the `TASK.md` file.
 
 ## 1. Create a table in the database to store "days to hire" statistics. 
 
-- Statistics should be per country(also global for the world) and per standard job.
-- It should contain average, minimum, and maximum days to hire.
-- Also, it should contain a number of job postings used to calculate the average. 
-We use this value to measure statistics quality. If the number of job postings is small, values can be inaccurate.
+This uses the column names mentioned elsewhere in the task specifications:
+- `min_days`
+- `avg_days`
+- `max_days`
+- `job_postings_number`
+Otherwise it is self-explanatory.
 
-You can add SQLAlchemy model to `home_task.models` module and generate a migration with:
+## 2. Write a CLI script to calculate and store "days for hire" statistics.
 
-    alembic revision --autogenerate -m "<description>"
+Implemented in `home_task/cli/days_to_hire.py`. Sample run:
 
-## 2. Write a CLI script to calculate "days to hire" statistics and store it in a created table.
+```bash
+$ python home_task/cli/days_to_hire.py --help
+Starting days to hire statistics calculation...
+usage: days_to_hire.py [-h] [--min-threshold MIN_THRESHOLD] [--standard-job-id STANDARD_JOB_ID] [--country-code COUNTRY_CODE]
 
-`days_to_hire` can contain potentially invalid values, because it is quite difficult to gather this information.
-For example, 1 day in most cases means that job posting was closed and reopened without real hiring.
-Large values can be caused by incorrect parsing of dates. 
-So we want to cut lowest and highest percentiles of `days_to_hire` before calculating average.
+Calculate days to hire statistics
 
-- Minimum days to hire is 10 percentile.
-- Maximum days to hire is 90 percentile.
-- Average days to hire is an average of **remaining values after cutting 10 and 90 percentiles**.
-- Number of job postings is a number of rows used to calculate an average.
-- Do not save resulted row if a number of job postings is less than 5. 
-  Allow passing this threshold as a parameter.
-- For each country and standard job create a separate row in a table.
-- Also, create a row for world per standard job. 
-  Job postings with `country_code` equal to `NULL` should be included in this calculation.
-- Overwrite existing rows in the table. We need only the latest statistics.
+optional arguments:
+  -h, --help            show this help message and exit
+  --min-threshold MIN_THRESHOLD
+                        Minimum number of job postings required to save statistics (default: 5)
+  --standard-job-id STANDARD_JOB_ID
+                        Calculate statistics for specific standard job ID only
+  --country-code COUNTRY_CODE
+                        Calculate statistics for specific country code only
+```
+```bash
+$ python home_task/cli/days_to_hire.py --min-threshold 10 --country-code UK --standard-job-id
+ c83e576e-fa9a-4aef-afb3-f495fca9a6bb
+Starting days to hire statistics calculation...
+Minimum threshold: 10 job postings.
+Processing 1 standard jobs and 1 countries...
+Processing standard job: c83e576e-fa9a-4aef-afb3-f495fca9a6bb...
+Processing country: UK...
+Stats already exist, updating with: min_days=12.0, avg_days=42.575, max_days=76.0, job_postings_number=80
+Processed country: UK.
+Completed!
+Total combinations processed: 1.
+Stats saved: 1.
+Stats skipped: 0.
+```
+
+This script:
+- Connects to the database;
+- Queries the `job_posting` table;
+- Calculates the minimum, average and maximum values of `days_to_hire` with the thresholds in mind, and the number of job postings used in the calculation;
+- Inserts the results into `job_posting_stats` or updates the data if present.
+
+Notes on the requirements from the task notes:
+- ORM was used instead of raw SQL queries.
+- Transactions were used to ensure that the database does not get corrupted, and there is a general rollback mechanism.
+- Only the rows for a specific job ID and country combination are loaded at any given time. If in the real world that is still too large to be saved in-memory, we can move the calculations to raw SQL, using the `percentile_disc()` function to get the 10th and 90th percentiles.
 
 ## 3. Create REST API with one endpoint to get "days to hire" statistics.
 
-- Endpoint should accept `standard_job_id` and `country_code` as request parameters.
-- If `country_code` is not specified, return statistics for the world.
+Implemented in `home_task/api/api.py.` This provides a single endpoint accepting `standard_job_id` (required) and `country_code` (optional) parameters. Sample run:
 
-Response example:
-
-    {
-        "standard_job_id": "5affc1b4-1d9f-4dec-b404-876f3d9977a0",
-        "country_code": "DE",
-        "min_days": 11.0,
-        "avg_days": 50.5,
-        "max_days": 80.9,
-        "job_postings_number": 100,
-    }
-
-# Some information to consider
-
-- Use FastAPI for REST API.
-- It is not necessary to use ORM. You can use raw SQL queries. 
-  Connection to the database is available in `home_task.db` module.
-- In a real environment code can fail at any moment with some probability. The database should not be corrupted.
-- In a real database we have millions of rows, so you can't load all of them into memory at once.
-- In a real environment new job postings are continuously added to the database. 
-  For simplicity, you can assume that data is frozen and will not change during script execution.
-
-# Installation
-
-Install packages with poetry:
-
-    python3 -m venv venv
-    . venv/bin/activate
-    pip install poetry
-    POETRY_VIRTUALENVS_CREATE=false poetry install
-
-Create database:
-
-    docker-compose up -d
-    docker cp migrations/data/ hrf_universe_postgres:/tmp
-    alembic upgrade head
+```bash
+$ python home_task/api/api.py
+INFO:     Started server process [12881]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+```
+```bash
+$ curl "http://localhost:8000/stats/days-to-hire?standard_job_id=c83e576e-fa9a-4aef-afb3-f495fca9a6bb"
+{"standard_job_id":"c83e576e-fa9a-4aef-afb3-f495fca9a6bb","country_code":"World","min_days":11.0,"avg_days":41.7710843373494,"max_days":76.0,"job_postings_number":166}
+```

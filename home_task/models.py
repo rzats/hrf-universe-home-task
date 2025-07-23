@@ -6,6 +6,7 @@ from sqlalchemy import (
     Integer,
     String,
     Table,
+    Float,
 )
 from sqlalchemy.orm import registry
 
@@ -67,3 +68,27 @@ class JobPosting(Model):
     standard_job_id: str
     country_code: Optional[str] = None
     days_to_hire: Optional[int] = None
+
+@mapper_registry.mapped
+@dataclass
+class JobPostingStats(Model):
+    __table__ = Table(
+        "job_posting_stats",
+        mapper_registry.metadata,
+        Column("id", String, nullable=False, primary_key=True),
+        Column("standard_job_id", String, nullable=False),
+        Column("country_code", String, nullable=True),
+        Column("min_days", Float, nullable=True),
+        Column("avg_days", Float, nullable=True),
+        Column("max_days", Float, nullable=True),
+        Column("job_postings_number", Integer, nullable=True),
+        schema="public",
+    )
+
+    id: str
+    standard_job_id: str
+    country_code: Optional[str] = None
+    min_days: Optional[float] = None
+    avg_days: Optional[float] = None
+    max_days: Optional[float] = None
+    job_postings_number: Optional[int] = None
